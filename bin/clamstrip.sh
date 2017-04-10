@@ -1,6 +1,13 @@
 #!/bin/bash
 # 20170409 Kirby
 
+
+if [[ $SPLUNK_HOME =~ forwarder ]]
+then 
+    exit 0
+fi
+
+
 dir="/opt/splunk/etc/deployment-apps/clamnix/unixclamdb"
 
 if [[ ! -f /var/lib/clamav/daily.cld ]] \
