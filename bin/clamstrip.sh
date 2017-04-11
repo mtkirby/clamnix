@@ -48,6 +48,14 @@ do
     fi
 done
 
+# copy files to deployment server's unixclamdb
+if [[ -d ${SPLUNK_HOME}/etc/apps/clamnix ]]
+then
+    mkdir "$SPLUNK_HOME"/etc/apps/clamnix/unixclamdb >/dev/null 2>&1
+    cp -f "$dir"/* "$SPLUNK_HOME"/etc/apps/clamnix/unixclamdb/ >/dev/null 2>&1
+fi
+
+
 #ClamAV-VDB:16 Mar 2016 23-17 +0000:57:4218790:60:X:X:amishhammer:1458170226
 maindate=$(egrep '^ClamAV-VDB:' main.info |cut -d':' -f2)
 dailydate=$(egrep '^ClamAV-VDB:' daily.info |cut -d':' -f2)

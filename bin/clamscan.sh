@@ -1,5 +1,7 @@
 #!/bin/bash
-# 20170409 Kirby
+# 20170411 Kirby
+
+export PATH=/sbin:/usr/sbin:/bin:/usr/bin:$PATH
 
 if ! which clamscan >/dev/null 2>&1
 then
@@ -20,12 +22,9 @@ if [[ $octet -ge 0 ]] \
 && [[ $octet -le 255 ]] \
 && [[ $octet =~ ^[[:digit:]]+$ ]]
 then
-    octet=$((octet + 1))
-    # 605200 = 1 week minus 10 minutes
-    sleeptime=$(( 604200 / octet ))
+    sleeptime=$(( ( 604800 / 256 ) * octet ))
 else
-    octet=$((RANDOM % 255))
-    octet=$((octet + 1))
+    sleeptime=$(( ( 604800 / 256 ) * ( RANDOM % 255 ) ))
 fi
 
 #sleep $sleeptime
@@ -54,7 +53,7 @@ fi
 IFS='
 '
 
-for line in $(clamscan -d "$unixclamdb" --scan-pe=no --scan-ole2=no --scan-pdf=no --scan-swf=no --scan-html=no --scan-xmldocs=no --scan-hwp3=no --scan-archive=no --max-filesize=10M --scan-mail=no --phishing-sigs=no --phishing-scan-urls=no --follow-dir-symlinks=0 --follow-file-symlinks=0 --cross-fs=no -o -i -r "${dirs[@]}")
+for line in $(clamscan -d "$unixclamdb" --scan-pe=no --scan-ole2=no --scan-pdf=no --scan-swf=no --scan-html=no --scan-xmldocs=no --scan-hwp3=no --scan-archive=no --max-filesize=10M --scan-mail=no --phishing-sigs=no --phishing-scan-urls=no --follow-dir-symlinks=0 --follow-file-symlinks=0 --cross-fs=no -o -i -r "${dirs[@]}" 2>/dev/null)
 do
     if [[ $line =~ FOUND$ ]]
     then
@@ -84,7 +83,13 @@ do
     fi
 done
 
-echo "${summary[@]}"
+# If the summary array is empty, then the scan failed to run.
+if [[ ${#summary[@]} == 0 ]]
+then
+    echo "FAILURE: clamscan failed to run"
+else
+    echo "${summary[@]}"
+fi
 
 
 #----------- SCAN SUMMARY -----------
@@ -98,6 +103,18 @@ echo "${summary[@]}"
 #Time: 10.076 sec (0 m 10 s)
 #
 
+
+if [[ -f "$unixclamdb"/main.info ]] \
+&& [[ -f "$unixclamdb"/daily.info ]]
+then
+    maindate=$(egrep '^ClamAV-VDB:' "$unixclamdb"/main.info |cut -d':' -f2)
+    dailydate=$(egrep '^ClamAV-VDB:' "$unixclamdb"/daily.info |cut -d':' -f2)
+    echo "maindate=\"$maindate\" dailydate=\"$dailydate\""
+else
+    echo "FAILURE: Unable to find main.info and daily.info"
+fi
+
+
 endepoch=$(date +%s)
 runtime=$(( endepoch - startepoch ))
 runhour=$(( runtime / 3600 ))
@@ -106,3 +123,4 @@ runmin=${runmin:$((${#runmin}-2)):${#runmin}}
 runsec=0$(( (runtime - ( runhour * 3600 )) % 60 ))
 runsec=${runsec:$((${#runsec}-2)):${#runsec}}
 echo "endtime=\"$(date)\" endepoch=\"$endepoch\" sleeptime=\"$sleeptime\" runtimesec=\"$runtime\" runtime=\"${runhour}:${runmin}:${runsec}\" result=\"complete\""
+
