@@ -1,5 +1,5 @@
 #!/bin/bash
-# 20170411 Kirby
+# 20170412 Kirby
 
 export PATH=/sbin:/usr/sbin:/bin:/usr/bin:$PATH
 
@@ -22,9 +22,10 @@ if [[ $octet -ge 0 ]] \
 && [[ $octet -le 255 ]] \
 && [[ $octet =~ ^[[:digit:]]+$ ]]
 then
-    sleeptime=$(( ( 604800 / 256 ) * octet ))
+    # 1309 seconds to spare in longest sleep
+    sleeptime=$(( ( 604800 / 256 ) * octet + ( RANDOM % ( 604800 / 256 / 2 )) - ( RANDOM % ( 604800 / 256 / 2 )) ))
 else
-    sleeptime=$(( ( 604800 / 256 ) * ( RANDOM % 255 ) ))
+    sleeptime=$(( ( 604800 / 256 ) * ( RANDOM % 255 ) + ( RANDOM % ( 604800 / 256 / 2 )) - ( RANDOM % ( 604800 / 256 / 2 )) ))
 fi
 
 #sleep $sleeptime
@@ -34,7 +35,7 @@ nice 20 $$ >/dev/null 2>&1
 ionice -c3 -p $$ >/dev/null 2>&1
 
 
-for dir in /usr/bin /usr/lib /usr/libexec /usr/lib32 /usr/lib64 /usr/local /usr/sbin
+for dir in /usr/bin /usr/lib /usr/libexec /usr/lib32 /usr/lib64 /usr/local /usr/sbin /tmp /var/tmp /dev/shm
 do
     if [[ -d $dir ]]
     then
@@ -123,4 +124,3 @@ runmin=${runmin:$((${#runmin}-2)):${#runmin}}
 runsec=0$(( (runtime - ( runhour * 3600 )) % 60 ))
 runsec=${runsec:$((${#runsec}-2)):${#runsec}}
 echo "endtime=\"$(date)\" endepoch=\"$endepoch\" sleeptime=\"$sleeptime\" runtimesec=\"$runtime\" runtime=\"${runhour}:${runmin}:${runsec}\" result=\"complete\""
-
