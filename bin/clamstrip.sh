@@ -1,5 +1,5 @@
 #!/bin/bash
-# 20170409 Kirby
+# 20170417 Kirby
 
 if [[ $SPLUNK_HOME =~ forwarder ]]
 then
@@ -29,12 +29,19 @@ then
     exit 1
 fi
 
-sigtool -u /var/lib/clamav/daily.cld
-sigtool -u /var/lib/clamav/main.cvd
+if ! sigtool -u /var/lib/clamav/daily.cld 2>&1
+then
+    echo "FAILURE: sigtool failed on daily.cld"
+fi
+
+if ! sigtool -u /var/lib/clamav/main.cvd 2>&1
+then
+    echo "FAILURE: sigtool failed on main.cld"
+fi
 
 # .mdb is PE section based hash signatures
 # It is not needed for unix/linux scans
-rm "$dir"/*.mdb
+rm -f "$dir"/*.mdb >/dev/null 2>&1
 
 # Filter the Unix. signatures
 # Goal is to remove any Win. signatures, so match on that and filter Unix.

@@ -1,7 +1,8 @@
 #!/bin/bash
 # 20170412 Kirby
+# 20170507 Kirby
 
-export PATH=/sbin:/usr/sbin:/bin:/usr/bin:$PATH
+export PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin:$PATH
 
 if ! which clamscan >/dev/null 2>&1
 then
@@ -17,25 +18,40 @@ then
 fi
 
 # startup sleep for server farms sharing disk
+# $RANDOM can equal 0, so always add 1
 octet=$(ip addr ls|grep ' inet '|grep -v 127.0.0.1|head -1 |awk '{print $2}' |cut -d'.' -f4 |cut -d'/' -f1)
+maxtime=1209600
+octdiff=$(( ( maxtime / 256 ) / 2 ))
 if [[ $octet -ge 0 ]] \
 && [[ $octet -le 255 ]] \
 && [[ $octet =~ ^[[:digit:]]+$ ]]
 then
-    # 1309 seconds to spare in longest sleep
-    sleeptime=$(( ( 604800 / 256 ) * octet + ( RANDOM % ( 604800 / 256 / 2 )) - ( RANDOM % ( 604800 / 256 / 2 )) ))
+    sleeptime=$(( 
+        ( ( maxtime / 256 ) * octet )
+        + ( ( (RANDOM + octdiff) * (RANDOM + octdiff) ) % octdiff ) 
+        - ( ( (RANDOM + octdiff) * (RANDOM + octdiff) ) % octdiff ) 
+    ))
+    if [[ $sleeptime -le 0 ]]
+    then
+        sleeptime=$(( (RANDOM + octdiff) * (RANDOM + octdiff)  % octdiff ))
+        echo "sleeptime=\"$sleeptime\" reason=\"octet $octet but fell below 1\""
+    else 
+        echo "sleeptime=\"$sleeptime\" reason=\"octet $octet\""
+    fi
 else
-    sleeptime=$(( ( 604800 / 256 ) * ( RANDOM % 255 ) + ( RANDOM % ( 604800 / 256 / 2 )) - ( RANDOM % ( 604800 / 256 / 2 )) ))
+    sleeptime=$(( ( (RANDOM + octdiff) * (RANDOM + octdiff) * (RANDOM + octdiff) ) % maxtime ))
+    echo "sleeptime=\"$sleeptime\" reason=\"random\""
 fi
 
-#sleep $sleeptime
 startepoch=$(date +%s)
+echo "starttime=\"$(date)\" startepoch=\"$startepoch\" sleeptime=\"$sleeptime\""
+sleep $sleeptime
 
 nice 20 $$ >/dev/null 2>&1
 ionice -c3 -p $$ >/dev/null 2>&1
 
 
-for dir in /usr/bin /usr/lib /usr/libexec /usr/lib32 /usr/lib64 /usr/local /usr/sbin /tmp /var/tmp /dev/shm
+for dir in /usr/bin /usr/lib /usr/libexec /usr/lib32 /usr/lib64 /usr/local/bin /usr/local/sbin /usr/local/lib /usr/local/lib64 /usr/local/libexec /usr/sbin /tmp /var/tmp /dev/shm
 do
     if [[ -d $dir ]]
     then
