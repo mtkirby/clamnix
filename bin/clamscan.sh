@@ -43,9 +43,9 @@ else
     echo "sleeptime=\"$sleeptime\" reason=\"random\""
 fi
 
-startepoch=$(date +%s)
-echo "starttime=\"$(date)\" startepoch=\"$startepoch\" sleeptime=\"$sleeptime\""
+echo "starttime=\"$(date)\" sleeptime=\"$sleeptime\""
 sleep $sleeptime
+startepoch=$(date +%s)
 
 nice 20 $$ >/dev/null 2>&1
 ionice -c3 -p $$ >/dev/null 2>&1
