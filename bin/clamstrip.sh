@@ -1,18 +1,29 @@
 #!/bin/bash
-# 20170417 Kirby
+# 20170509 Kirby
 
 if [[ $SPLUNK_HOME =~ forwarder ]]
 then
     exit 0
 fi
 
-
-dir="${SPLUNK_HOME}/etc/deployment-apps/clamnix/unixclamdb"
-
-if [[ ! -f /var/lib/clamav/daily.cld ]] \
-|| [[ ! -f /var/lib/clamav/main.cvd ]]
+if ! freshclam >/dev/null 2>&1
 then
-    echo "FAILURE: clam files not found in /var/lib/clamav"
+    echo "FAILURE: unable to run freshclam"
+    exit 1
+fi
+
+dbdir="$SPLUNK_HOME"/etc/deployment-apps/clamnix/unixclamdb
+clamdir="/var/lib/clamav"
+
+# the main and daily files will have either a .cvd or .cld extension
+for file in "$clamdir"/main.c?d "$clamdir"/daily.c?d
+do
+    files[${#files[@]}]="$file"
+done
+
+if [[ ${#files[@]} == 0 ]]
+then
+    echo "FAILURE: no main/daily files in $clamdir"
     exit 1
 fi
 
@@ -22,26 +33,24 @@ then
     exit 1
 fi
 
-mkdir "$dir" >/dev/null 2>&1
-if ! cd "$dir"
+mkdir "$dbdir" >/dev/null 2>&1
+if ! cd "$dbdir"
 then
-    echo "FAILURE: unable to chdir $dir"
+    echo "FAILURE: unable to chdir $dbdir"
     exit 1
 fi
 
-if ! sigtool -u /var/lib/clamav/daily.cld 2>&1
-then
-    echo "FAILURE: sigtool failed on daily.cld"
-fi
-
-if ! sigtool -u /var/lib/clamav/main.cvd 2>&1
-then
-    echo "FAILURE: sigtool failed on main.cld"
-fi
+for file in "${files[@]}"
+do
+    if ! sigtool -u "$file" 2>&1
+    then
+        echo "FAILURE: sigtool failed on $file"
+    fi
+done
 
 # .mdb is PE section based hash signatures
 # It is not needed for unix/linux scans
-rm -f "$dir"/*.mdb >/dev/null 2>&1
+rm -f "$dbdir"/*.mdb >/dev/null 2>&1
 
 # Filter the Unix. signatures
 # Goal is to remove any Win. signatures, so match on that and filter Unix.
@@ -54,10 +63,10 @@ do
     fi
 done
 
-if [[ -d ${SPLUNK_HOME}/etc/apps/clamnix ]]
+if [[ -d "$SPLUNK_HOME"/etc/apps/clamnix ]]
 then
     mkdir "$SPLUNK_HOME"/etc/apps/clamnix/unixclamdb >/dev/null 2>&1
-    cp -f "$dir"/* "$SPLUNK_HOME"/etc/apps/clamnix/unixclamdb/ >/dev/null 2>&1
+    cp -f "$dbdir"/* "$SPLUNK_HOME"/etc/apps/clamnix/unixclamdb/ >/dev/null 2>&1
 fi
 
 #ClamAV-VDB:16 Mar 2016 23-17 +0000:57:4218790:60:X:X:amishhammer:1458170226
