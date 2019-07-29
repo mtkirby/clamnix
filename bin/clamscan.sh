@@ -1,6 +1,5 @@
 #!/bin/bash
-# 20170412 Kirby
-# 20170507 Kirby
+# 20190729 Kirby
 
 export PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin:$PATH
 
@@ -20,7 +19,8 @@ fi
 # startup sleep for server farms sharing disk
 # $RANDOM can equal 0, so always add 1
 octet=$(ip addr ls|grep ' inet '|grep -v 127.0.0.1|head -1 |awk '{print $2}' |cut -d'.' -f4 |cut -d'/' -f1)
-maxtime=1209600
+#maxtime=1209600
+maxtime=86400
 octdiff=$(( ( maxtime / 256 ) / 2 ))
 if [[ $octet -ge 0 ]] \
 && [[ $octet -le 255 ]] \
@@ -51,26 +51,88 @@ nice 20 $$ >/dev/null 2>&1
 ionice -c3 -p $$ >/dev/null 2>&1
 
 
-for dir in /usr/bin /usr/lib /usr/libexec /usr/lib32 /usr/lib64 /usr/local/bin /usr/local/sbin /usr/local/lib /usr/local/lib64 /usr/local/libexec /usr/sbin /tmp /var/tmp /dev/shm
+declare -A seen
+
+for dir in /bin /sbin /usr/bin /lib /usr/lib /usr/libexec /usr/lib32 /usr/lib64 /usr/local/bin /usr/local/sbin /usr/local/lib /usr/local/lib64 /usr/local/libexec /usr/sbin /tmp /var/tmp /dev/shm 
 do
     if [[ -d $dir ]]
     then
-        dirs[${#dirs[@]}]="$dir"
+        if [[ -h $dir ]]
+        then
+            dir=$(readlink -f $dir)
+        fi
+
+        if [[ ${seen["$dir"]} == 1 ]]
+        then
+            continue
+        elif [[ -d "$dir" ]]
+        then
+            seen["$dir"]=1
+            dirs[${#dirs[@]}]="$dir"
+        fi
     fi
 done
-if ! stat /bin|grep -q 'symbolic link'
-then
-    dirs[${#dirs[@]}]="$dir"
-fi
-if ! stat /sbin|grep -q 'symbolic link'
-then
-    dirs[${#dirs[@]}]="$dir"
-fi
 
-IFS='
-'
+for exe in /proc/*/exe
+do
+    if [[ -h $exe ]]
+    then
+        dir=$(dirname $(readlink -f $exe) 2>/dev/null)
+        xdirs[${#xdirs[@]}]="$dir"
+    fi
+done
 
-for line in $(clamscan -d "$unixclamdb" --scan-pe=no --scan-ole2=no --scan-pdf=no --scan-swf=no --scan-html=no --scan-archive=no --max-filesize=10M --scan-mail=no --phishing-sigs=no --phishing-scan-urls=no --follow-dir-symlinks=0 --follow-file-symlinks=0 --cross-fs=no -o -i -r "${dirs[@]}" 2>/dev/null)
+for module in $(lsmod |awk '{print $1}')
+do
+    if [[ "$module" == 'Module' ]]
+    then
+        continue
+    fi
+    filename=$(modinfo "$module" 2>/dev/null |awk '/^filename:/ {print $2}')
+    filename=$(readlink -f "$filename")
+    dir=$(dirname $(readlink -f $filename) 2>/dev/null)
+    xdirs[${#xdirs[@]}]="$dir"
+done
+
+for filename in $(ldconfig -p|grep ' => ' |sed -e 's/.* => \(\/*\)/\1/')
+do
+    dir=$(dirname $(readlink -f $filename) 2>/dev/null)
+    xdirs[${#dirs[@]}]="$dir"
+done
+
+
+for pid in /proc/[0-9]*
+do
+    for filename in $(awk '/ r-xp .* \// {print $6}' "$pid"/maps 2>/dev/null)
+    do
+        dir=$(dirname $(readlink -f $filename) 2>/dev/null)
+        xdirs[${#xdirs[@]}]="$dir"
+    done
+done
+
+
+for xdir in ${xdirs[@]}
+do
+    xdir=$(readlink -f $xdir 2>/dev/null)
+    found=0
+    for dir in ${dirs[@]}
+    do
+        if [[ $xdir =~ ^$dir ]]
+        then
+            found=1
+        fi
+    done
+    if [[ $found == 0 ]] && [[ -d $xdir ]] && [[ $xdir =~ ^/ ]] && ! [[ ${seen["$xdir"]} == 1 ]]
+    then
+        seen["$xdir"]=1
+        dirs[${#dirs[@]}]="$xdir"
+    fi
+done
+
+
+IFS=$'\n'
+
+for line in $(clamscan -d "$unixclamdb" --scan-pe=no --scan-ole2=no --scan-pdf=no --scan-swf=no --scan-html=no --scan-archive=yes --max-filesize=100M --scan-mail=no --phishing-sigs=no --phishing-scan-urls=no --follow-dir-symlinks=2 --follow-file-symlinks=2 --cross-fs=yes -o -i -r "${dirs[@]}" /proc/*/exe 2>/dev/null)
 do
     if [[ $line =~ FOUND$ ]]
     then
@@ -99,6 +161,8 @@ do
         summary[${#summary[@]}]="Time=\"${line##*: }\""
     fi
 done
+summary[${#summary[@]}]="ScannedDirectories=\"${dirs[@]}\""
+
 
 # If the summary array is empty, then the scan failed to run.
 if [[ ${#summary[@]} == 0 ]]
